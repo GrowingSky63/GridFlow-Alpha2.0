@@ -1,25 +1,23 @@
-import json
-from logging import log
-import logging
-from time import time
+from domain.bdgd.transformer_unit import TransformerUnitMT, TransformerUnitAT
+from domain.bdgd.generator_unit import GeneratorUnitBT, GeneratorUnitMT
+from domain.bdgd.consumer_unit import ConsumerUnitBT, ConsumerUnitMT
+from domain.bdgd.connection_branch import ConnectionBranch
+from domain.bdgd.substation import Substation
+from domain.bdgd.conductor import Conductor
+from domain.bdgd.segment import SegmentMT
+from domain.bdgd import BDGDBase
+from infra.bdgd_downloader import BDGDDownloader
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import URL, create_engine
-from tqdm import tqdm
-from domain.bdgd import BDGDBase
-from domain.bdgd.conductor import Conductor
-from domain.bdgd.connection_branch import ConnectionBranch
-from domain.bdgd.consumer_unit import ConsumerUnitBT, ConsumerUnitMT
-from domain.bdgd.generator_unit import GeneratorUnitBT, GeneratorUnitMT
-from domain.bdgd.segment import SegmentMT
-from domain.bdgd.substation import Substation
-from domain.bdgd.transformer_unit import TransformerUnitMT, TransformerUnitAT
-from infra.bdgd_downloader import BDGDDownloader
 from tempfile import TemporaryDirectory
+from time import time
+from tqdm import tqdm
 import geopandas as gpd
-import dotenv, os
+import dotenv, os, json, logging
 
 dotenv.load_dotenv(dotenv.find_dotenv())
+logging.basicConfig(filename='bdgd_downloader.log')
 
 drivername = 'postgresql'
 username = 'gridflow'
@@ -177,7 +175,7 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
                     gdf['geometry'] = gdf.geometry.apply(lambda geom: geom.wkb)
                     columns['geometry'] = 'geometry'
                 gdf = gdf[columns.values()]
-                print(f'GeoDataFrame carregado na memória. ({time() - t_start:.2f})')
+                print(f'GeoDataFrame carregado na memória. ({time() - t_start:.2f}s)')
                 with Session.begin() as session:
                     chunk_size = 10000
                     with tqdm(total=len(gdf), desc=f"Inserindo {layer}", unit="reg", unit_scale=True) as pbar:
@@ -192,12 +190,10 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
                                 )
                             except IntegrityError as exc:
                                 if hasattr(exc, 'orig') and hasattr(exc.orig, 'pgcode'): # type: ignore
-                                    log(1, exc.orig.pgerror) # type: ignore
+                                    logging.warning(exc.orig.pgerror.replace('\n', ' ')) # type: ignore
                                 else:
                                     raise exc
                             finally:
                                 pbar.update(len(chunk))
                                 del chunk
-
-                # print(f"\033[32m{bdgd_name} -> {layer} ({time() - t_start:.2f}s)\033[m")
                 del gdf
