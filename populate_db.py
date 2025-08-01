@@ -166,7 +166,6 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
         )
         with downloader as bdgd_path:
             for layer, columns in layers_columns.items():
-                t_start = time()
                 gdf = gpd.read_file(bdgd_path, layer=layer)
                 have_geom = 'geometry' in gdf.columns
                 gdf.rename(columns=columns, inplace=True)
@@ -175,25 +174,22 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
                     gdf['geometry'] = gdf.geometry.apply(lambda geom: geom.wkb)
                     columns['geometry'] = 'geometry'
                 gdf = gdf[columns.values()]
-                print(f'GeoDataFrame carregado na memória. ({time() - t_start:.2f}s)')
                 with Session.begin() as session:
-                    chunk_size = 10000
-                    with tqdm(total=len(gdf), desc=f"Inserindo {layer}", unit="reg", unit_scale=True) as pbar:
-                        for i in range(0, len(gdf), chunk_size):
-                            chunk = gdf.iloc[i:i+chunk_size]
-                            try:
-                                chunk.to_sql(
-                                    table_names[layer],
-                                    con=session.get_bind(),
-                                    if_exists='append',
-                                    index=False
-                                )
-                            except IntegrityError as exc:
-                                if hasattr(exc, 'orig') and hasattr(exc.orig, 'pgcode'): # type: ignore
-                                    logging.warning(exc.orig.pgerror.replace('\n', ' ')) # type: ignore
-                                else:
-                                    raise exc
-                            finally:
-                                pbar.update(len(chunk))
-                                del chunk
+                    chunk_size = 50000
+                    for i in range(0, len(gdf), chunk_size):
+                        chunk = gdf.iloc[i:i+chunk_size]
+                        try:
+                            chunk.to_sql(
+                                table_names[layer],
+                                con=session.get_bind(),
+                                if_exists='append',
+                                index=False
+                            )
+                        except IntegrityError as exc:
+                            if hasattr(exc, 'orig') and hasattr(exc.orig, 'pgcode'): # type: ignore
+                                logging.warning(exc.orig.pgerror.replace('\n', ' ')) # type: ignore
+                            else:
+                                raise exc
+                        finally:
+                            del chunk
                 del gdf
