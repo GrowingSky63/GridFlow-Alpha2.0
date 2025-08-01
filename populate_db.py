@@ -162,8 +162,7 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
             bdgd_id=bdgd_id,
             bdgd_name=bdgd_name,
             output_folder=temp_dir,
-            extract=True,
-            verbose=True
+            extract=True
         )
         with downloader as bdgd_path:
             for layer, columns in layers_columns.items():
