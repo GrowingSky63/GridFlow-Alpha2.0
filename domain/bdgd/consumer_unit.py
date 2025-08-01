@@ -1,7 +1,6 @@
 from domain.bdgd import *
 from domain.bdgd.connection_branch import ConnectionBranch
 from domain.bdgd.generator_unit import GeneratorUnitBT, GeneratorUnitMT
-from datetime import datetime
 
 from domain.bdgd.substation import Substation
 
@@ -24,10 +23,9 @@ class ConsumerUnit(BDGDBase):
 class ConsumerUnitBT(ConsumerUnit):
     """Unidade Consumidora de Baixa Tensão (UCBT)"""
     __tablename__ = 'consumer_unit_bt'
-    generator_unit_bt_cod_id: Mapped[str_40] = mapped_column(ForeignKey('generator_unit_bt.cod_id'))
+    generator_unit_bt_cod_id: Mapped[str_40]
     connection_branch_cod_id: Mapped[str_40] = mapped_column(ForeignKey("connection_branch.cod_id"))
 
-    generator_unit: Mapped[GeneratorUnitBT] = relationship()
     connection_branch: Mapped[ConnectionBranch] = relationship()
     
     def __repr__(self) -> str:
@@ -36,9 +34,8 @@ class ConsumerUnitBT(ConsumerUnit):
 class ConsumerUnitMT(ConsumerUnit):
     """Unidade Consumidora de Média Tensão (UCMT)"""
     __tablename__ = 'consumer_unit_mt'
-    generator_unit_mt_cod_id: Mapped[str_40] = mapped_column(ForeignKey('generator_unit_mt.cod_id'))
+    generator_unit_mt_cod_id: Mapped[str_40]
 
-    generator_unit: Mapped[GeneratorUnitMT] = relationship()
 
     def __repr__(self) -> str:
         return f'ConsumerUnitMT(cod_id={self.cod_id}, electrical_link={self.electrical_link}, supplied_voltage={self.supplied_voltage}, is_active={self.is_active}, connection_date={self.connection_date}, installed_load={self.installed_load}, generator_unit_mt_cod_id={self.generator_unit_mt_cod_id})'
