@@ -36,7 +36,7 @@ class BDGDDownloader:
                     return zip_path
 
                 total_size = int(response.headers.get('content-length', 0))
-                with tqdm(total=total_size, unit='B', unit_scale=True, desc=f"Downloading {self.bdgd_name}") as pbar:
+                with tqdm(total=total_size, unit='B', unit_scale=True, desc=f"Downloading {self.bdgd_name}", ascii=True) as pbar:
                     for chunk in response.iter_content(chunk_size=8192):
                         if chunk:
                             f.write(chunk)

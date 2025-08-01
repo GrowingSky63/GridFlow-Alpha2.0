@@ -178,7 +178,7 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
                 print(f'GeoDataFrame carregado na memória. ({time() - t_start:.2f}s)')
                 with Session.begin() as session:
                     chunk_size = 10000
-                    with tqdm(total=len(gdf), desc=f"Inserindo {layer}", unit="reg", unit_scale=True) as pbar:
+                    with tqdm(total=len(gdf), desc=f"Inserindo {layer}", unit="reg", unit_scale=True, ascii=True) as pbar:
                         for i in range(0, len(gdf), chunk_size):
                             chunk = gdf.iloc[i:i+chunk_size]
                             try:
