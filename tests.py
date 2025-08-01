@@ -1,7 +1,9 @@
 import json
+from logging import log
+import logging
 from time import time
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import URL, create_engine
 from tqdm import tqdm
 from domain.bdgd import BDGDBase
@@ -175,6 +177,7 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
                     gdf['geometry'] = gdf.geometry.apply(lambda geom: geom.wkb)
                     columns['geometry'] = 'geometry'
                 gdf = gdf[columns.values()]
+                print(f'GeoDataFrame carregado na memória. ({time() - t_start:.2f})')
                 with Session.begin() as session:
                     chunk_size = 10000
                     with tqdm(total=len(gdf), desc=f"Inserindo {layer}", unit="reg", unit_scale=True) as pbar:
@@ -187,9 +190,9 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
                                     if_exists='append',
                                     index=False
                                 )
-                            except DBAPIError as exc:
-                                if hasattr(exc, 'orig') and hasattr(exc.orig, 'pgcode') and exc.orig.pgcode == '23505': # type: ignore
-                                    ...
+                            except IntegrityError as exc:
+                                if hasattr(exc, 'orig') and hasattr(exc.orig, 'pgcode'): # type: ignore
+                                    log(1, exc.orig.pgerror) # type: ignore
                                 else:
                                     raise exc
                             finally:
