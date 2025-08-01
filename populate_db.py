@@ -46,6 +46,7 @@ with open('gdbs.json') as bdgds_file:
 
 with TemporaryDirectory(prefix='gridflow') as temp_dir:
     for bdgd_name, bdgd_id in bdgds.items():
+        print(bdgd_name)
         layers_columns = {
             'SUB': {
                 'COD_ID': 'cod_id',
