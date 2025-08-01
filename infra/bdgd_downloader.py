@@ -2,6 +2,7 @@ from os import path, remove
 from requests import get
 from tqdm import tqdm
 from zipfile import ZipFile
+import shutil
 
 class BDGDDownloader:
     def __init__(self, bdgd_id: str, bdgd_name: str, output_folder: str, extract: bool = False, verbose: bool = True):
@@ -69,4 +70,7 @@ class BDGDDownloader:
         if self.zip_path and path.exists(self.zip_path):
             remove(self.zip_path)
         if self.bdgd_path and path.exists(self.bdgd_path):
-            remove(self.bdgd_path)
+            if path.isdir(self.bdgd_path):
+                shutil.rmtree(self.bdgd_path)
+            else:
+                remove(self.bdgd_path)
