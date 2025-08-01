@@ -11,11 +11,13 @@ class BDGDDownloader:
         self.extract = extract
         self.verbose = verbose
         self.zip_path = None
+        self.bdgd_path = None
 
     def __enter__(self) -> str:
         self.zip_path = self.download()
         if self.extract:
-            return self.extract_zip()
+            self.bdgd_path = self.extract_zip()
+            return self.bdgd_path
         return self.zip_path
         
     def __exit__(self, exc_type, exc_value, traceback):
@@ -66,3 +68,5 @@ class BDGDDownloader:
         """Limpa arquivos temporários"""
         if self.zip_path and path.exists(self.zip_path):
             remove(self.zip_path)
+        if self.bdgd_path and path.exists(self.bdgd_path):
+            remove(self.bdgd_path)
