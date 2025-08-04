@@ -7,11 +7,8 @@ class SegmentMT(BDGDBase):
     __tablename__ = 'segment_mt'
     electric_link_1: Mapped[str_40]
     electric_link_2: Mapped[str_40]
-    substation_cod_id: Mapped[SubstationFk]
+    substation_cod_id: Mapped[str_40]
     circuit: Mapped[str_40]
-    conductor_cod_id: Mapped[ConductorFk]
+    conductor_cod_id: Mapped[str_40]
     length: Mapped[float]
     geometry = mapped_column(MultiLinestring, nullable=False)
-
-    substation: Mapped[Substation] = relationship()
-    conductor: Mapped[Conductor] = relationship()

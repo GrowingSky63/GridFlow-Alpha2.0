@@ -10,6 +10,7 @@ from infra.bdgd_downloader import BDGDDownloader
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import URL, create_engine
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from tempfile import TemporaryDirectory
 from time import time
 from tqdm import tqdm
@@ -18,6 +19,8 @@ import dotenv, os, json, logging
 
 dotenv.load_dotenv(dotenv.find_dotenv())
 logging.basicConfig(filename='bdgd_downloader.log')
+
+REGISTRY_CHUNK_SIZE = 5000
 
 drivername = 'postgresql'
 username = 'gridflow'
@@ -43,6 +46,38 @@ Session = sessionmaker(engine)
 
 with open('gdbs.json') as bdgds_file:
     bdgds = json.loads(bdgds_file.read())
+
+def make_gdf(bdgd_path, layer, columns):
+    gdf = gpd.read_file(bdgd_path, layer=layer)
+    have_geom = 'geometry' in gdf.columns
+    gdf.rename(columns=columns, inplace=True)
+    if have_geom:
+        gdf.set_geometry('geometry_obj', inplace=True)
+        gdf['geometry'] = gdf.geometry.apply(lambda geom: geom.wkb)
+        columns['geometry'] = 'geometry'
+    return gdf[columns.values()]
+
+def write_gdf_into_gdb(bdgd_path, layer, columns, chunk_size=10000):
+    gdf = make_gdf(bdgd_path, layer, columns)
+    with Session.begin() as session:
+        chunk_size = 50000
+        for i in range(0, len(gdf), chunk_size):
+            chunk = gdf.iloc[i:i+chunk_size]
+            try:
+                chunk.to_sql(
+                    table_names[layer],
+                    con=session.get_bind(),
+                    if_exists='append',
+                    index=False
+                )
+            except IntegrityError as exc:
+                if hasattr(exc, 'orig') and hasattr(exc.orig, 'pgcode'): # type: ignore
+                    logging.warning(exc.orig.pgerror.replace('\n', ' ')) # type: ignore
+                else:
+                    raise exc
+            finally:
+                del chunk
+    del gdf
 
 with TemporaryDirectory(prefix='gridflow') as temp_dir:
     for bdgd_name, bdgd_id in bdgds.items():
@@ -164,32 +199,9 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
             output_folder=temp_dir,
             extract=True
         )
+
         with downloader as bdgd_path:
-            for layer, columns in layers_columns.items():
-                gdf = gpd.read_file(bdgd_path, layer=layer)
-                have_geom = 'geometry' in gdf.columns
-                gdf.rename(columns=columns, inplace=True)
-                if have_geom:
-                    gdf.set_geometry('geometry_obj', inplace=True)
-                    gdf['geometry'] = gdf.geometry.apply(lambda geom: geom.wkb)
-                    columns['geometry'] = 'geometry'
-                gdf = gdf[columns.values()]
-                with Session.begin() as session:
-                    chunk_size = 50000
-                    for i in range(0, len(gdf), chunk_size):
-                        chunk = gdf.iloc[i:i+chunk_size]
-                        try:
-                            chunk.to_sql(
-                                table_names[layer],
-                                con=session.get_bind(),
-                                if_exists='append',
-                                index=False
-                            )
-                        except IntegrityError as exc:
-                            if hasattr(exc, 'orig') and hasattr(exc.orig, 'pgcode'): # type: ignore
-                                logging.warning(exc.orig.pgerror.replace('\n', ' ')) # type: ignore
-                            else:
-                                raise exc
-                        finally:
-                            del chunk
-                del gdf
+            with ProcessPoolExecutor(max_workers=2) as executor:
+                futures = [executor.submit(write_gdf_into_gdb, bdgd_path, layer, columns, REGISTRY_CHUNK_SIZE) for layer, columns in layers_columns.items()]
+            for future in as_completed(futures):
+                print(future.result())

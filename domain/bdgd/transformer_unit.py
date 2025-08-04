@@ -7,15 +7,12 @@ class TransformerUnit(BDGDBase):
     electrical_link_1: Mapped[str_40]
     electrical_link_2: Mapped[str_40]
     electrical_link_3: Mapped[str_40 | None]
-    substation_cod_id: Mapped[SubstationFk]
+    substation_cod_id: Mapped[str_40]
     dist: Mapped[int]
     nominal_power: Mapped[float]
     transformer_type: Mapped[str] = mapped_column(TransformerType)
     unit_type: Mapped[str] = mapped_column(UnitType)
     geometry = mapped_column(Point, nullable=False)
-    @declared_attr
-    def substation(cls) -> Mapped[Substation]:
-        return relationship(Substation)
 
 class TransformerUnitMT(TransformerUnit):
     """Unidade Transformadora de Média Tensão (UNTRMT)"""

@@ -6,16 +6,12 @@ from domain.bdgd.substation import Substation
 class GeneratorUnit(BDGDBase):
     """Classe base para unidades geradoras"""
     __abstract__ = True
-    substation_cod_id: Mapped[SubstationFk]
+    substation_cod_id: Mapped[str_40]
     supplied_voltage: Mapped[float] = mapped_column(VoltageType)
     is_active: Mapped[str] = mapped_column(Status)
     connection_date: Mapped[str_10]
     installed_load: Mapped[float]
     #energy_mean: Mapped[float]
-
-    @declared_attr
-    def substation(cls) -> Mapped[Substation]:
-        return relationship(Substation)
 
 class GeneratorUnitBT(GeneratorUnit):
     """Unidade Geradora de Baixa Tensão (UGBT)"""
