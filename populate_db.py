@@ -48,9 +48,8 @@ with open('gdbs.json') as bdgds_file:
 
 def make_gdf(bdgd_path, layer, columns):
     t_start = time()
-    print(f"  Instanciando gdf da camada {layer}", end='')
     gdf = gpd.read_file(bdgd_path, layer=layer)
-    print(f" ({time() - t_start:.2f} s)")
+    print(f"\033[32mgdf da camada {layer} instanciado na memória ({time() - t_start:.2f} s)\033[m")
     have_geom = 'geometry' in gdf.columns
     gdf.rename(columns=columns, inplace=True)
     if have_geom:
@@ -62,7 +61,6 @@ def make_gdf(bdgd_path, layer, columns):
 def write_gdf_into_gdb(bdgd_path, layer, columns, chunk_size=10000):
     gdf = make_gdf(bdgd_path, layer, columns)
     t_start = time()
-    print(f"  Instanciando gdf da camada {layer}", end='')
     with Session.begin() as session:
         chunk_size = 50000
         for i in range(0, len(gdf), chunk_size):
@@ -82,11 +80,11 @@ def write_gdf_into_gdb(bdgd_path, layer, columns, chunk_size=10000):
             finally:
                 del chunk
     del gdf
-    print(f" ({time() - t_start:.2f} s)")
+    print(f"\033[32mgdf da camada {layer} inserido no banco ({time() - t_start:.2f} s)\033[m")
 
 with TemporaryDirectory(prefix='gridflow') as temp_dir:
     for bdgd_name, bdgd_id in bdgds.items():
-        print(f"Iniciando processamento do gdb {bdgd_name}")
+        print(f"\033[32mIniciando processamento do gdb {bdgd_name}\033[m")
         layers_columns = {
             'SUB': {
                 'COD_ID': 'cod_id',
@@ -206,7 +204,7 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
         )
 
         with downloader as bdgd_path:
-            print("  Download Iniciado")
+            print("\033[32mDownload Iniciado\033[m")
             with ProcessPoolExecutor(max_workers=2) as executor:
                 futures = [executor.submit(write_gdf_into_gdb, bdgd_path, layer, columns, REGISTRY_CHUNK_SIZE) for layer, columns in layers_columns.items()]
             for future in as_completed(futures):
