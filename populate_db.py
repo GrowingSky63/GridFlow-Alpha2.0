@@ -35,7 +35,7 @@ url = URL.create(
     port=5432,
     database='bdgd'
 )
-engine = create_engine(url, echo=True)
+engine = create_engine(url, echo=False)
 
 BDGDBase.metadata.drop_all(engine)
 
