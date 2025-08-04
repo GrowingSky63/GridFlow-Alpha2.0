@@ -77,7 +77,7 @@ def write_gdf_into_gdb(layer, columns, chunk_size=10000, bdgd_path: str | None =
             )
             del chunk
     del gdf
-    print(f"\033[32mgdf da camada {layer} inserido no banco ({time() - t_start:.2f} s)\033[m")
+    print(f"\033[32mgdf da camada {layer} inserido no banco ({time() - t_start:.2f} s)\033[m" if bdgd_path else f"\033[32mtabela da camada {layer} criada no banco ({time() - t_start:.2f} s)\033[m")
 
 with TemporaryDirectory(prefix='gridflow') as temp_dir:
     for bdgd_name, bdgd_id in bdgds.items():
