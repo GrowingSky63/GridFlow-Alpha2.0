@@ -13,7 +13,6 @@ from sqlalchemy import URL, create_engine
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tempfile import TemporaryDirectory
 from time import time
-from tqdm import tqdm
 import geopandas as gpd
 import dotenv, os, json, logging
 
@@ -36,7 +35,7 @@ url = URL.create(
     port=5432,
     database='bdgd'
 )
-engine = create_engine(url, echo=False)
+engine = create_engine(url, echo=True)
 
 BDGDBase.metadata.drop_all(engine)
 
@@ -48,7 +47,10 @@ with open('gdbs.json') as bdgds_file:
     bdgds = json.loads(bdgds_file.read())
 
 def make_gdf(bdgd_path, layer, columns):
+    t_start = time()
+    print(f"  Instanciando gdf da camada {layer}", end='')
     gdf = gpd.read_file(bdgd_path, layer=layer)
+    print(f" ({time() - t_start:.2f} s)")
     have_geom = 'geometry' in gdf.columns
     gdf.rename(columns=columns, inplace=True)
     if have_geom:
@@ -59,6 +61,8 @@ def make_gdf(bdgd_path, layer, columns):
 
 def write_gdf_into_gdb(bdgd_path, layer, columns, chunk_size=10000):
     gdf = make_gdf(bdgd_path, layer, columns)
+    t_start = time()
+    print(f"  Instanciando gdf da camada {layer}", end='')
     with Session.begin() as session:
         chunk_size = 50000
         for i in range(0, len(gdf), chunk_size):
@@ -78,10 +82,11 @@ def write_gdf_into_gdb(bdgd_path, layer, columns, chunk_size=10000):
             finally:
                 del chunk
     del gdf
+    print(f" ({time() - t_start:.2f} s)")
 
 with TemporaryDirectory(prefix='gridflow') as temp_dir:
     for bdgd_name, bdgd_id in bdgds.items():
-        print(bdgd_name)
+        print(f"Iniciando processamento do gdb {bdgd_name}")
         layers_columns = {
             'SUB': {
                 'COD_ID': 'cod_id',
@@ -201,6 +206,7 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
         )
 
         with downloader as bdgd_path:
+            print("  Download Iniciado")
             with ProcessPoolExecutor(max_workers=2) as executor:
                 futures = [executor.submit(write_gdf_into_gdb, bdgd_path, layer, columns, REGISTRY_CHUNK_SIZE) for layer, columns in layers_columns.items()]
             for future in as_completed(futures):
