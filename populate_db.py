@@ -1,23 +1,12 @@
-from domain.bdgd.transformer_unit import TransformerUnitMT, TransformerUnitAT
-from domain.bdgd.generator_unit import GeneratorUnitBT, GeneratorUnitMT
-from domain.bdgd.consumer_unit import ConsumerUnitBT, ConsumerUnitMT
-from domain.bdgd.connection_branch import ConnectionBranch
-from domain.bdgd.substation import Substation
-from domain.bdgd.conductor import Conductor
-from domain.bdgd.segment import SegmentMT
-from domain.bdgd import BDGDBase
 from infra.bdgd_downloader import BDGDDownloader
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import URL, create_engine
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tempfile import TemporaryDirectory
 from time import time
 import geopandas as gpd
-import dotenv, os, json, logging
+import dotenv, os, json
 
 dotenv.load_dotenv(dotenv.find_dotenv())
-logging.basicConfig(filename='bdgd_downloader.log')
 
 REGISTRY_CHUNK_SIZE = 5000
 
@@ -37,16 +26,32 @@ url = URL.create(
 )
 engine = create_engine(url, echo=False)
 
-BDGDBase.metadata.drop_all(engine)
-
-BDGDBase.metadata.create_all(engine)
-
-Session = sessionmaker(engine)
-
 with open('gdbs.json') as bdgds_file:
     bdgds = json.loads(bdgds_file.read())
 
-def make_gdf(bdgd_path, layer, columns):
+def ensure_tables_exist(conn, layers_columns, table_names):
+    import pandas as pd
+    for layer, columns in layers_columns.items():
+        df = pd.DataFrame(columns=columns.values())
+        df.to_sql(
+            table_names[layer],
+            con=conn,
+            if_exists='append',
+            index=False
+        )
+
+def create_gdf(columns):
+    gdf = gpd.GeoDataFrame(columns=columns.values())
+    have_geom = 'geometry' in gdf.columns
+    gdf.rename(columns=columns, inplace=True)
+    if have_geom:
+        gdf.set_geometry('geometry_obj', inplace=True)
+        gdf['geometry'] = gdf.geometry.apply(lambda geom: geom.wkb)
+        columns['geometry'] = 'geometry'
+    return gdf[columns.values()]
+
+
+def open_gdf(bdgd_path, layer, columns):
     t_start = time()
     gdf = gpd.read_file(bdgd_path, layer=layer)
     print(f"\033[32mgdf da camada {layer} instanciado na memória ({time() - t_start:.2f} s)\033[m")
@@ -58,27 +63,19 @@ def make_gdf(bdgd_path, layer, columns):
         columns['geometry'] = 'geometry'
     return gdf[columns.values()]
 
-def write_gdf_into_gdb(bdgd_path, layer, columns, chunk_size=10000):
-    gdf = make_gdf(bdgd_path, layer, columns)
+def write_gdf_into_gdb(layer, columns, chunk_size=10000, bdgd_path: str | None = None):
+    gdf = create_gdf(columns) if not bdgd_path else open_gdf(bdgd_path, layer, columns)
     t_start = time()
-    with Session.begin() as session:
-        chunk_size = 50000
+    with engine.connect() as conn:
         for i in range(0, len(gdf), chunk_size):
             chunk = gdf.iloc[i:i+chunk_size]
-            try:
-                chunk.to_sql(
-                    table_names[layer],
-                    con=session.get_bind(),
-                    if_exists='append',
-                    index=False
-                )
-            except IntegrityError as exc:
-                if hasattr(exc, 'orig') and hasattr(exc.orig, 'pgcode'): # type: ignore
-                    logging.warning(exc.orig.pgerror.replace('\n', ' ')) # type: ignore
-                else:
-                    raise exc
-            finally:
-                del chunk
+            chunk.to_sql(
+                table_names[layer],
+                con=conn,
+                if_exists='append',
+                index=False
+            )
+            del chunk
     del gdf
     print(f"\033[32mgdf da camada {layer} inserido no banco ({time() - t_start:.2f} s)\033[m")
 
@@ -205,7 +202,8 @@ with TemporaryDirectory(prefix='gridflow') as temp_dir:
 
         with downloader as bdgd_path:
             print("\033[32mDownload Iniciado\033[m")
+            [write_gdf_into_gdb(layer, columns, REGISTRY_CHUNK_SIZE) for layer, columns in layers_columns.items()]
             with ProcessPoolExecutor(max_workers=2) as executor:
-                futures = [executor.submit(write_gdf_into_gdb, bdgd_path, layer, columns, REGISTRY_CHUNK_SIZE) for layer, columns in layers_columns.items()]
+                futures = [executor.submit(write_gdf_into_gdb, layer, columns, REGISTRY_CHUNK_SIZE, bdgd_path) for layer, columns in layers_columns.items()]
             for future in as_completed(futures):
                 print(future.result())
